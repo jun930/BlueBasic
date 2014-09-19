@@ -221,8 +221,11 @@ typedef struct
 } os_timer_t;
 extern os_timer_t blueBasic_timers[OS_MAX_TIMER];
 
-#define FLASHSTORE_CPU_BASEADDR ((unsigned char*)0x9000)
-#define FLASHSTORE_DMA_BASEADDR ((unsigned long)0x29000)
+extern const unsigned char flashstore[];
+// xdata address(when BANK = 1)
+#define FLASHSTORE_CPU_BASEADDR (&flashstore[0])
+// xdata addr - xbank start addr + bank1 offset addr
+#define FLASHSTORE_DMA_BASEADDR (((uint32)FLASHSTORE_CPU_BASEADDR - 0x8000) + (uint32)0x8000)
 
 #define OS_memset(A, B, C)     osal_memset(A, B, C)
 #define OS_memcpy(A, B, C)     osal_memcpy(A, B, C)
@@ -253,7 +256,7 @@ extern long OS_millis(void);
 extern void OS_delaymicroseconds(short micros);
 extern void OS_reboot(char flash);
 extern void OS_flashstore_init(void);
-extern unsigned char OS_serial_open(unsigned long baud, unsigned char parity, unsigned char bits, unsigned char stop, unsigned char flow, unsigned short onread, unsigned short onwrite);
+extern unsigned char OS_serial_open(unsigned char port, unsigned long baud, unsigned char parity, unsigned char bits, unsigned char stop, unsigned char flow, unsigned short onread, unsigned short onwrite);
 extern unsigned char OS_serial_read(void);
 extern unsigned char OS_serial_write(unsigned char ch);
 extern unsigned char OS_serial_available(unsigned char ch);
@@ -309,7 +312,7 @@ extern void interpreter_loop(void);
 extern unsigned char interpreter_run(unsigned short gofrom, unsigned char canreturn);
 extern void interpreter_timer_event(unsigned short id);
 
-#define FLASHSTORE_NRPAGES    4
+#define FLASHSTORE_NRPAGES    2
 #define FLASHSTORE_PAGESIZE   2048
 #define FLASHSTORE_LEN        (FLASHSTORE_NRPAGES * FLASHSTORE_PAGESIZE)
 

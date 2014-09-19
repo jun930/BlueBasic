@@ -2775,7 +2775,7 @@ cmd_serial:
           }
           onwrite = expression(EXPR_NORMAL);
         }
-        if (OS_serial_open(baud, parity, bits, stop, flow, onread, onwrite))
+        if (OS_serial_open(0, baud, parity, bits, stop, flow, onread, onwrite))
         {
           goto qwhat;
         }

@@ -170,6 +170,9 @@ char OS_prompt_available(void)
 void OS_putchar(char ch)
 {
   ble_console_write(ch);
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  HalUARTWrite(HAL_UART_PORT_1, (unsigned char *)&ch, 1);
+#endif
 }
 
 void* OS_rmemcpy(void *dst, const void GENERIC *src, unsigned int len)
@@ -188,8 +191,9 @@ void* OS_rmemcpy(void *dst, const void GENERIC *src, unsigned int len)
 
 void OS_init(void)
 {
-#ifndef ENABLE_BLE_CONSOLE
-  OS_openserial();
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  // port, baud, parity, bits, stop, flow, onread, onwrite
+  OS_serial_open(1, 115200, 'N', 8, 1, 'N', 0, 0);
 #endif
 }
 
@@ -327,10 +331,20 @@ static void _uartCallback(uint8 port, uint8 event)
       interpreter_run(serial[0].onwrite, 1);
     }
   }
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  else if(port == HAL_UART_PORT_1)
+  {
+    unsigned char c;
+    if (HalUARTRead(port, &c, 1))
+    {
+      OS_type(c);
+    }
+  }
+#endif
 }
 
 
-unsigned char OS_serial_open(unsigned long baud, unsigned char parity, unsigned char bits, unsigned char stop, unsigned char flow, unsigned short onread, unsigned short onwrite)
+unsigned char OS_serial_open(unsigned char port, unsigned long baud, unsigned char parity, unsigned char bits, unsigned char stop, unsigned char flow, unsigned short onread, unsigned short onwrite)
 {
   halUARTCfg_t config;
   
@@ -370,10 +384,10 @@ unsigned char OS_serial_open(unsigned long baud, unsigned char parity, unsigned 
   config.tx.maxBufSize = 128;
   config.intEnable = 1;
   config.callBackFunc = _uartCallback;
-  if (HalUARTOpen(HAL_UART_PORT_0, &config) == HAL_UART_SUCCESS)
+  if (HalUARTOpen(port, &config) == HAL_UART_SUCCESS)
   {
-    serial[0].onread = onread;
-    serial[0].onwrite = onwrite;
+    serial[port].onread = onread;
+    serial[port].onwrite = onwrite;
     return 0;
   }
  

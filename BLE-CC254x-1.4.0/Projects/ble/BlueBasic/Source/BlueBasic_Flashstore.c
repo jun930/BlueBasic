@@ -16,8 +16,10 @@ unsigned char __store[FLASHSTORE_LEN];
 #define FLASHSTORE_DMA_BASEADDR (0)
 #endif
 
-static const unsigned char* flashstore = (unsigned char*)FLASHSTORE_CPU_BASEADDR;
-#define FLASHSTORE_FADDR(ADDR)  ((((unsigned char*)(ADDR) - FLASHSTORE_CPU_BASEADDR) + FLASHSTORE_DMA_BASEADDR) >> 2)
+// Allocate CONST memory into flash memory
+const unsigned char flashstore[FLASHSTORE_LEN] = { 0xff, 0xff, 0xff, 0xff };
+#define FLASHSTORE_FADDR(ADDR)  ((((uint32)(ADDR) - (uint32)FLASHSTORE_CPU_BASEADDR) + FLASHSTORE_DMA_BASEADDR) >> 2)
+
 #define FLASHSTORE_FPAGE(ADDR)  (FLASHSTORE_FADDR(ADDR) >> 9)
 
 static unsigned short** lineindexstart;
