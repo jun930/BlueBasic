@@ -309,6 +309,12 @@ static void _uartCallback(uint8 port, uint8 event)
   {
     osal_set_event(blueBasic_TaskID, BLUEBASIC_EVENT_SERIAL);
   }
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  if (port == HAL_UART_PORT_1)
+  {
+    osal_set_event(blueBasic_TaskID, BLUEBASIC_EVENT_SERIAL_CONSOLE);
+  }
+#endif  
 }
 
 

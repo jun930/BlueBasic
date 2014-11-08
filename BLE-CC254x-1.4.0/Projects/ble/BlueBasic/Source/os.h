@@ -216,6 +216,7 @@ extern unsigned char blueBasic_TaskID;
 #define OS_MAX_INTERRUPT          4
 #define BLUEBASIC_EVENT_INTERRUPT 0x0100
 #define BLUEBASIC_EVENT_INTERRUPTS 0x0F00 // Num bits == OS_MAX_INTERRUPT
+#define BLUEBASIC_EVENT_SERIAL_CONSOLE    0x1000
 
 #define OS_AUTORUN_TIMEOUT        5000
 

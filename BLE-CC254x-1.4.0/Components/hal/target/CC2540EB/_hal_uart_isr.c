@@ -627,7 +627,7 @@ HAL_ISR_FUNCTION( halUart1TxIsr, UTX1_VECTOR )
 
   HAL_EXIT_ISR();
 }
-
+#if 0 // BLUE BASIC
 #if (defined POWER_SAVING && defined HAL_UART_GPIO_ISR)
 /***************************************************************************************************
  * @fn      PortX Interrupt Handler
@@ -655,6 +655,13 @@ HAL_ISR_FUNCTION(port1Isr, P1INT_VECTOR)
   PxIF = 0;
 
   HAL_EXIT_ISR();
+}
+#endif
+
+#else
+void hal_uart_isr_isr_function(void)
+{
+  HalUARTResume();
 }
 #endif
 

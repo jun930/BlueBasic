@@ -406,7 +406,31 @@ uint16 BlueBasic_ProcessEvent( uint8 task_id, uint16 events )
 
     return (events ^ BLUEBASIC_EVENT_SERIAL);
   }
-
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  static unsigned char uart_cmd_buffer[128];
+  static unsigned char uart_cmd_buffer_len;
+    
+  if ( events & BLUEBASIC_EVENT_SERIAL_CONSOLE )
+  {
+    unsigned char c;
+    if (HalUARTRead(HAL_UART_PORT_1, &c, 1))
+    {
+      HalUARTWrite(HAL_UART_PORT_1, (unsigned char *)&c, 1);    // echo
+      if(c == '\n' || uart_cmd_buffer_len == 128){
+        for(unsigned char i=0;i<uart_cmd_buffer_len;i++)
+        {
+          OS_type(uart_cmd_buffer[i]);
+        }
+        if(c == '\n') OS_type('\n');
+        uart_cmd_buffer_len = 0;
+      }else{
+        uart_cmd_buffer[uart_cmd_buffer_len] = c;
+        uart_cmd_buffer_len++;
+      }
+    }
+    return (events ^ BLUEBASIC_EVENT_SERIAL_CONSOLE);
+  }
+#endif
   // Discard unknown events
   return 0;
 }
@@ -561,6 +585,10 @@ HAL_ISR_FUNCTION(port0Isr, P0INT_VECTOR)
   HAL_EXIT_ISR();
 }
 
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+void hal_uart_isr_isr_function(void);
+#endif
+        
 HAL_ISR_FUNCTION(port1Isr, P1INT_VECTOR)
 {
   unsigned char status;
@@ -582,6 +610,9 @@ HAL_ISR_FUNCTION(port1Isr, P1INT_VECTOR)
         osal_set_event(blueBasic_TaskID, BLUEBASIC_EVENT_INTERRUPT << i);
       }
     }
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+    hal_uart_isr_isr_function();
+#endif
   }
 
   HAL_EXIT_ISR();
