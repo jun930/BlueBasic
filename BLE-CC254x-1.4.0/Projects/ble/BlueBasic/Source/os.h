@@ -221,7 +221,7 @@ extern unsigned char blueBasic_TaskID;
 
 #define OS_MAX_FILE               16
 
-#define OS_MAX_SERIAL             1
+#define OS_MAX_SERIAL             2
 
 // Serial
 typedef struct

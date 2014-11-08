@@ -166,6 +166,9 @@ char OS_prompt_available(void)
 void OS_putchar(char ch)
 {
   ble_console_write(ch);
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  HalUARTWrite(HAL_UART_PORT_1, (unsigned char *)&ch, 1);
+#endif
 }
 
 void* OS_rmemcpy(void *dst, const void GENERIC *src, unsigned int len)
@@ -186,6 +189,10 @@ void OS_init(void)
 {
 #ifndef ENABLE_BLE_CONSOLE
   OS_openserial();
+#endif
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  // port, baud, parity, bits, stop, flow, onread, onwrite
+  OS_serial_open(HAL_UART_PORT_1, 115200, 'N', 8, 1, 'N', 0, 0);
 #endif
 }
 
@@ -330,25 +337,32 @@ unsigned char OS_serial_open(unsigned char port, unsigned long baud, unsigned ch
       return 2;
   }
  
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  if (parity != 'N' || bits != 8 || stop != 1)
+  {
+    return 3;
+  }
+#else
   // Only support port 0, no-parity, 8-bits, 1 stop bit
   if (port != 0 || parity != 'N' || bits != 8 || stop != 1 || flow != 'H')
   {
     return 3;
   }
+#endif
 
   config.configured = 1;
   config.baudRate = baud;
-  config.flowControl = 1;
+  config.flowControl = (flow == 'H' ? 1 : 0);
   config.flowControlThreshold = 64;
   config.idleTimeout = 0;
   config.rx.maxBufSize = 128;
   config.tx.maxBufSize = 128;
   config.intEnable = 1;
   config.callBackFunc = _uartCallback;
-  if (HalUARTOpen(HAL_UART_PORT_0, &config) == HAL_UART_SUCCESS)
+  if (HalUARTOpen(port, &config) == HAL_UART_SUCCESS)
   {
-    serial[0].onread = onread;
-    serial[0].onwrite = onwrite;
+    serial[port].onread = onread;
+    serial[port].onwrite = onwrite;
     return 0;
   }
  
@@ -357,8 +371,8 @@ unsigned char OS_serial_open(unsigned char port, unsigned long baud, unsigned ch
 
 unsigned char OS_serial_close(unsigned char port)
 {
-  serial[0].onread = 0;
-  serial[0].onwrite = 0;
+  serial[port].onread = 0;
+  serial[port].onwrite = 0;
   // HalUARTClose(0); - In the hal_uart.h include file, but not actually in the code
   return 1;
 }
