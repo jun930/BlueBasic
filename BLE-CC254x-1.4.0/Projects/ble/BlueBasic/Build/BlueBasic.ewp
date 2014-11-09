@@ -2449,6 +2449,8 @@
           <state>FEATURE_OAD_HEADER=TRUE</state>
           <state>FEATURE_BOOST_CONVERTER=P2_0</state>
           <state>UART_CONSOLE=TRUE</state>
+          <state>HAL_UART_ISR_RX_MAX=32</state>
+          <state>HAL_UART_ISR_TX_MAX=128</state>
         </option>
         <option>
           <name>CCPreprocFile</name>
