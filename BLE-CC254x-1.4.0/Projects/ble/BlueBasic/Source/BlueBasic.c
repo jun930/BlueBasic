@@ -240,6 +240,13 @@ void BlueBasic_Init( uint8 task_id )
   blueBasic_TaskID = task_id;
 
 #ifdef ENABLE_BLE_CONSOLE
+#if (defined UART_CONSOLE) && (UART_CONSOLE == TRUE)
+  // for the legal issue in japan, inhibit BLE CONSOLE ADVERT by the P1(2) setting  
+  P2INP &= ~BV(6);      // Port 1 pull up
+  P1INP &= ~BV(2);      // pull up down
+  P1DIR &= ~BV(2);      // input
+  GAPRole_SetParameter( GAPROLE_ADVERT_ENABLED, !(P1 & BV(2)), 0, NULL );
+#endif
   GAPRole_SetParameter( GAPROLE_ADVERT_DATA, 0, sizeof(consoleAdvert), (void*)consoleAdvert );
 #endif
 
