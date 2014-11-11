@@ -520,8 +520,8 @@ static unsigned char spiChannel;
 static unsigned char spiWordsize;
 static unsigned char analogReference;
 static unsigned char analogResolution = 0x30; // 14-bits
-static unsigned char i2cScl;
-static unsigned char i2cSda;
+static unsigned char i2cScl = 0;
+static unsigned char i2cSda = 0;
 
 static VAR_TYPE pin_read(unsigned char major, unsigned char minor);
 static unsigned char pin_parse(void);
@@ -560,6 +560,10 @@ static char ble_get_uuid(void);
 static unsigned char ble_read_callback(unsigned short handle, gattAttribute_t* attr, unsigned char* value, unsigned char* len, unsigned short offset, unsigned char maxlen);
 static unsigned char ble_write_callback(unsigned short handle, gattAttribute_t* attr, unsigned char* value, unsigned char len, unsigned short offset);
 static void ble_notify_assign(gatt_variable_ref* vref);
+
+#if TARGET_CC2541
+static unsigned char i2c_wait_stat(unsigned char stat);
+#endif
 
 #ifdef TARGET_CC254X
 
@@ -3722,13 +3726,31 @@ cmd_spi:
   goto run_next_statement;
   
 //
-// I2C MASTER <scl pin> <sda pin> [PULLUP]
+// I2C MASTER [<scl pin> <sda pin>] [PULLUP]
 //  or
 // I2C WRITE <addr>, <data, ...> [, READ <variable>|<array>]
 //  or
 // I2C READ <addr>, <variable>|<array>, ...
-//  note: The CC2541 has i2c hardware which we are not yet using.
 //
+// note: If you use i2c hardware you can type as follows:
+// I2C MASTER [PULLUP]
+//
+#if TARGET_CC2541
+#define I2C_ENS1            BV(6)
+#define I2C_STA             BV(5)
+#define I2C_STO             BV(4)
+#define I2C_SI              BV(3)
+#define I2C_AA              BV(2)
+// start condition
+#define I2C_SR (0x80 | I2C_ENS1 | I2C_STA | I2C_AA)
+// stop condition
+#define I2C_SP (0x80 | I2C_ENS1 | I2C_STO | I2C_AA)
+// I2C module enabled
+#define I2C_DO (0x80 | I2C_ENS1 | I2C_AA)
+// should be double of the case which a timeout occur.
+#define I2C_TIMEOUT_COUNT       1000
+#define I2C_IS_HW          (i2cScl == 0xff &&  i2cSda == 0xff)
+#endif
 cmd_i2c:
   switch (*txtpos++)
   {
@@ -3736,36 +3758,53 @@ cmd_i2c:
     {
       unsigned char pullup = 0;
       unsigned char* ptr = heap;
-
-      i2cScl = pin_parse();
-      i2cSda = pin_parse();
-      if (error_num)
+#if TARGET_CC2541
+      if (*txtpos == PM_PULLUP || *txtpos == NL)
       {
-        goto qwhat;
+        // i2c hardware mode
+        if (*txtpos == PM_PULLUP)
+        {
+          I2CWC |= 0x0c; // pullup enable
+          pullup = 1;
+          txtpos++;
+        }
+        i2cScl = i2cSda = 0xff;
+        I2CWC &= ~0x0c; // pullup disable
+        I2CCFG = I2C_DO;
       }
-      ignore_blanks();
-      if (*txtpos == PM_PULLUP)
+      else
+#endif
       {
-        txtpos++;
-        pullup = 1;
-      }
-      // Setup the i2c port with optional INPUT_PULLUP.
-      // We the outputs to LOW so when the pin is set to OUTPUT, it
-      // will be driven low by default.
-      *ptr++ = WIRE_PIN_INPUT | i2cScl;
-      if (pullup)
-      {
-        *ptr++ = WIRE_INPUT_PULLUP;
-      }
-      *ptr++ = WIRE_LOW;
-      *ptr++ = WIRE_PIN_INPUT | i2cSda;
-      if (pullup)
-      {
-        *ptr++ = WIRE_INPUT_PULLUP;
-      }
-      *ptr++ = WIRE_LOW;
+        i2cScl = pin_parse();
+        i2cSda = pin_parse();
+        if (error_num)
+        {
+          goto qwhat;
+        }
+        ignore_blanks();
+        if (*txtpos == PM_PULLUP)
+        {
+          txtpos++;
+          pullup = 1;
+        }
+        // Setup the i2c port with optional INPUT_PULLUP.
+        // We the outputs to LOW so when the pin is set to OUTPUT, it
+        // will be driven low by default.
+        *ptr++ = WIRE_PIN_INPUT | i2cScl;
+        if (pullup)
+        {
+          *ptr++ = WIRE_INPUT_PULLUP;
+        }
+        *ptr++ = WIRE_LOW;
+        *ptr++ = WIRE_PIN_INPUT | i2cSda;
+        if (pullup)
+        {
+          *ptr++ = WIRE_INPUT_PULLUP;
+        }
+        *ptr++ = WIRE_LOW;
       
-      pin_wire(heap, ptr);
+        pin_wire(heap, ptr);
+      }
       break;
     }
 
@@ -3792,9 +3831,23 @@ cmd_i2c:
       *ptr++ = 0;
 
       // Start
-      WIRE_SDA_LOW();
-      WIRE_SCL_LOW();
-      
+#if TARGET_CC2541
+      if (I2C_IS_HW)
+      {
+        I2CCFG = I2C_SR;
+        if (i2c_wait_stat(0x08) == 0)
+        {
+          I2CCFG = I2C_SP;
+          goto qwhat;
+        }
+      }
+      else
+#endif
+      {
+        WIRE_SDA_LOW();
+        WIRE_SCL_LOW();
+      }
+
       // Encode data we want to write
       for (;; len++)
       {
@@ -3813,9 +3866,23 @@ cmd_i2c:
           }
           // Switch from WRITE to READ
           // Re-start
-          WIRE_SCL_HIGH();
-          WIRE_SDA_LOW();
-          WIRE_SCL_LOW();
+#if TARGET_CC2541
+          if (I2C_IS_HW)
+          {
+            I2CCFG = I2C_SR;
+            if (i2c_wait_stat(0x10) == 0)
+            {
+              I2CCFG = I2C_SP;
+              goto qwhat;
+            }
+          }
+          else
+#endif
+          {
+            WIRE_SCL_HIGH();
+            WIRE_SDA_LOW();
+            WIRE_SCL_LOW();
+          }
           rnw = 1;
           d = i;
         }
@@ -3833,26 +3900,76 @@ cmd_i2c:
           }
         }
         d |= rnw;
-        for (b = 128; b; b >>= 1)
+#if TARGET_CC2541
+        if (I2C_IS_HW)
         {
-          if (d & b)
+          // restart
+          if (I2CSTAT == 0x10)
           {
-            WIRE_SDA_HIGH();
+            I2CDATA = d;
+            I2CCFG = I2C_DO;
+            if (i2c_wait_stat(0x40) == 0)
+            {
+              I2CCFG = I2C_SP;
+              goto qwhat;
+            }
+            I2CCFG = I2C_DO;
+            if (i2c_wait_stat(0x50) == 0)
+            {
+              I2CCFG = I2C_SP;
+              goto qwhat;
+            }
           }
           else
           {
-            WIRE_SDA_LOW();
+            I2CDATA = d;
+            I2CCFG = I2C_DO;
+            if (i2c_wait_stat(len == 0 ? 0x18 : 0x28) == 0)
+            {
+              I2CCFG = I2C_SP;
+              goto qwhat;
+            }
           }
-          WIRE_SCL_HIGH();
-          WIRE_SCL_WAIT();
-          WIRE_SCL_LOW();
         }
+        else
+#endif
+        {
+#if TARGET_CC2541
+          if (I2C_IS_HW)
+          {
+            I2CDATA = d;
+            I2CCFG = I2C_DO;
+            if (i2c_wait_stat(0x28) == 0)
+            {
+              I2CCFG = I2C_SP;
+              goto qwhat;
+            }           
+          }
+          else
+#endif
+          {
+            for (b = 128; b; b >>= 1)
+            {
+              if (d & b)
+              {
+                WIRE_SDA_HIGH();
+              }
+              else
+              {
+                WIRE_SDA_LOW();
+              }
+              WIRE_SCL_HIGH();
+              WIRE_SCL_WAIT();
+              WIRE_SCL_LOW();
+            }
 
-        // Ack
-        WIRE_SDA_HIGH();
-        WIRE_SCL_HIGH();
-        WIRE_SCL_WAIT();
-        WIRE_SCL_LOW();
+            // Ack
+            WIRE_SDA_HIGH();
+            WIRE_SCL_HIGH();
+            WIRE_SCL_WAIT();
+            WIRE_SCL_LOW();
+          }
+        }
         
         // If this is a read we have no more to write, so we go and read instead.
         if (rnw)
@@ -3882,68 +3999,89 @@ cmd_i2c:
         len = 1;
       }
 
-      *ptr++ = WIRE_INPUT_SET;
-      data = ptr;
-      ptr += sizeof(unsigned char*);
-      *ptr++ = sizeof(unsigned char);
-      
-      // Read bits
-      WIRE_SCL_LOW();
-      WIRE_SDA_HIGH();
-      for (i = len; i--; )
+#if TARGET_CC2541
+      if (rdata && I2C_IS_HW)
       {
-        unsigned char b;
-        for (b = 8; b; b--)
+        for (i = len; i--; )
         {
-          WIRE_SCL_HIGH();
-          WIRE_SCL_WAIT();
-          WIRE_SDA_READ();
-          WIRE_SCL_LOW();
+          *rdata++ = I2CDATA;
         }
-        // Ack
-        if (i)
-        {
-          WIRE_SDA_LOW();
-        }
-        // Nack
-        else
-        {
-          WIRE_SDA_HIGH();
-        }
-        WIRE_SCL_HIGH();
+      }
+      else
+      {
+#endif
+        *ptr++ = WIRE_INPUT_SET;
+        data = ptr;
+        ptr += sizeof(unsigned char*);
+        *ptr++ = sizeof(unsigned char);
+      
+        // Read bits
         WIRE_SCL_LOW();
         WIRE_SDA_HIGH();
+        for (i = len; i--; )
+        {
+          unsigned char b;
+          for (b = 8; b; b--)
+          {
+            WIRE_SCL_HIGH();
+            WIRE_SCL_WAIT();
+            WIRE_SDA_READ();
+            WIRE_SCL_LOW();
+          }
+          // Ack
+          if (i)
+          {
+            WIRE_SDA_LOW();
+          }
+          // Nack
+          else
+          {
+            WIRE_SDA_HIGH();
+          }
+          WIRE_SCL_HIGH();
+          WIRE_SCL_LOW();
+          WIRE_SDA_HIGH();
+        }
       }
 i2c_end:
-      // End
-      WIRE_SDA_LOW();
-      WIRE_SCL_HIGH();
-      WIRE_SDA_HIGH();
+#if TARGET_CC2541
+      if (I2C_IS_HW)
+      {
+        I2CCFG = I2C_SP;
+      }
+      else
+#endif
+      {
+        // End
+        WIRE_SDA_LOW();
+        WIRE_SCL_HIGH();
+        WIRE_SDA_HIGH();
 
-      if (data)
-      {
-        *(unsigned char**)data = ptr;
-        OS_memset(ptr, 0, len * 8 * 2);
-      }
-      
-      pin_wire(heap, ptr);
-      if (error_num)
-      {
-        break;
-      }
-      // If we read data, reassemble it
-      if (data)
-      {
-        unsigned char v = 0;
-        unsigned char idx = 0;
-        len *= 8;
-        for (idx = 1, ptr++; idx <= len; idx++, ptr += 2)
+        if (data)
         {
-          v = (v << 1) | (*ptr ? 1 : 0);
-          if (!(idx & 7))
+          *(unsigned char**)data = ptr;
+          OS_memset(ptr, 0, len * 8 * 2);
+        }
+      
+        pin_wire(heap, ptr);
+        if (error_num)
+        {
+          break;
+        }
+        // If we read data, reassemble it
+        if (data)
+        {
+          unsigned char v = 0;
+          unsigned char idx = 0;
+          len *= 8;
+          for (idx = 1, ptr++; idx <= len; idx++, ptr += 2)
           {
-            *rdata++ = v;
-            v = 0;
+            v = (v << 1) | (*ptr ? 1 : 0);
+            if (!(idx & 7))
+            {
+              *rdata++ = v;
+              v = 0;
+            }
           }
         }
       }
@@ -5295,3 +5433,20 @@ extern void interpreter_devicefound(unsigned char addtype, unsigned char* addres
 }
 
 #endif // TARGET_CC254X
+
+#if TARGET_CC2541
+static unsigned char i2c_wait_stat(unsigned char stat)
+{
+  int cnt = 0;
+  while (I2CSTAT != stat)
+  {
+    if (cnt >= I2C_TIMEOUT_COUNT)
+    {
+      error_num = ERROR_GENERAL;
+      return 0;
+    }
+    cnt ++;
+  }
+  return 1;
+}
+#endif
