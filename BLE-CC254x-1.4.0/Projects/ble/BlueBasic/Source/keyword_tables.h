@@ -21,6 +21,7 @@ static const unsigned char keywords_1[] =
   'B','A','T','T','E','R','Y',FUNC_BATTERY,
   'B','T','P','E','E','K',BLE_FUNC_BTPEEK,
   'B','T','P','O','K','E',KW_BTPOKE,
+  'B','E','E','P',KW_BEEP,
   'O','F','F',KW_CONSTANT,CO_OFF,
   'O','N','C','O','N','N','E','C','T',BLE_ONCONNECT,
   'O','N','D','I','S','C','O','V','E','R',BLE_ONDISCOVER,

@@ -146,6 +146,7 @@ enum
   KW_CLOSE,
   KW_READ,
   KW_WRITE,
+  KW_BEEP,
   
   // -----------------------
   // Keyword spacers - to add main keywords later without messing up the numbering below
@@ -158,7 +159,7 @@ enum
   KW_SPACE4,
   KW_SPACE5,
   KW_SPACE6,
-  KW_SPACE7,
+  //KW_SPACE7,
 
   // -----------------------
   // Operators
@@ -1888,6 +1889,8 @@ interperate:
       goto cmd_read;
     case KW_WRITE:
       goto cmd_write;
+    case KW_BEEP:
+      goto cmd_beep;
   }
   goto qwhat;
 
@@ -3532,6 +3535,34 @@ qhoom:
       heap = item;
       goto qoom;
     }
+  }
+cmd_beep:
+  {
+    val = expression(EXPR_NORMAL);
+    if (error_num)
+    {
+      goto qwhat;
+    }
+    if (val)
+    {
+      // sound on
+      PERCFG |= 0x40;
+      P1SEL |= 0x01;
+      T1CTL = 0x0c;
+      T1CCTL2 = (0x28 | 0x04);
+      T1CC0L = 50;
+      T1CC0H = 0;
+      T1CC2L = 25;
+      T1CC2H = 0;
+      T1CTL |= 0x02;
+    }
+    else
+    {
+      // sound off
+      T1CTL &= ~0x03;
+      P1SEL &= ~0x01;
+    }
+    goto run_next_statement;
   }
 
 //
