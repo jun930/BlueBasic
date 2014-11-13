@@ -147,6 +147,8 @@ enum
   KW_READ,
   KW_WRITE,
   KW_BEEP,
+  KW_LEDON,
+  KW_LEDOFF,
   
   // -----------------------
   // Keyword spacers - to add main keywords later without messing up the numbering below
@@ -157,8 +159,8 @@ enum
   KW_SPACE2,
   KW_SPACE3,
   KW_SPACE4,
-  KW_SPACE5,
-  KW_SPACE6,
+ // KW_SPACE5,
+  //KW_SPACE6,
   //KW_SPACE7,
 
   // -----------------------
@@ -292,6 +294,10 @@ enum
   CO_POWER,
   CO_INTERNAL,
   CO_EXTERNAL,
+  CO_ALL,
+  CO_RED,
+  CO_GREEN,
+  CO_BLUE
 };
 
 // Constant map (so far all constants are <= 16 bits)
@@ -324,6 +330,10 @@ static const VAR_TYPE constantmap[] =
   CO_POWER,
   CO_INTERNAL,
   CO_EXTERNAL,
+  CO_ALL,
+  CO_RED,
+  CO_GREEN,
+  CO_BLUE
 };
 
 //
@@ -1891,6 +1901,10 @@ interperate:
       goto cmd_write;
     case KW_BEEP:
       goto cmd_beep;
+    case KW_LEDON:
+      goto cmd_ledon;
+    case KW_LEDOFF:
+      goto cmd_ledoff;
   }
   goto qwhat;
 
@@ -3564,7 +3578,56 @@ cmd_beep:
     }
     goto run_next_statement;
   }
+cmd_ledon:
+  {
+    val = expression(EXPR_NORMAL);
+    if (error_num)
+    {
+      goto qwhat;
+    }
+    // Todo: This should be done once at initialization only
+    P0DIR |= (BV(0) | BV(1) | BV(7));
+    switch (val) 
+    {
+      case CO_RED:
+        P0 &= ~(BV(0));
+        break;
+      case CO_BLUE:
+        P0 &= ~(BV(1));
+        break;
+      case CO_GREEN:
+        P0 &= ~(BV(7));
+        break;
+    default:
+      P0 &= (BV(0) & BV(1) & BV(7));
+    }
+    goto run_next_statement;
+  }
 
+cmd_ledoff:
+  {
+    val = expression(EXPR_NORMAL);
+    if (error_num)
+    {
+      goto qwhat;
+    }
+    switch (val) 
+    {
+      case CO_RED:
+        P0 |= BV(0);
+        break;
+      case CO_BLUE:
+         P0 |= BV(1);
+        break;
+      case CO_GREEN:
+         P0 |= BV(7);
+        break;
+    default:
+      P0 |= (BV(0) | BV(1) | BV(7));
+    }
+    goto run_next_statement;
+  }
+  
 //
 // SPI MASTER <port 0|1|2|3>, <mode 0|1|2|3>, LSB|MSB <speed> [, wordsize]
 //  or
